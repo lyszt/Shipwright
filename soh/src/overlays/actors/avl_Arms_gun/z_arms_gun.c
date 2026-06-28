@@ -1,31 +1,28 @@
-#include "z_arms_hook.h"
+#include "z_arms_gun.h"
 #include "objects/object_link_boy/object_link_boy.h"
 #include "soh/Enhancements/game-interactor/GameInteractor.h"
 #include "soh/Enhancements/game-interactor/GameInteractor_Hooks.h"
-#include "overlays/effects/ovl_Effect_Ss_HitMark/z_eff_ss_hitmark.h"
 
 #define FLAGS (ACTOR_FLAG_UPDATE_CULLING_DISABLED | ACTOR_FLAG_DRAW_CULLING_DISABLED)
 
-void ArmsHook_Init(Actor* thisx, PlayState* play);
-void ArmsHook_Destroy(Actor* thisx, PlayState* play);
-void ArmsHook_Update(Actor* thisx, PlayState* play);
-void ArmsHook_Draw(Actor* thisx, PlayState* play);
+void Cal38_Init(Actor* thisx, PlayState* play);
+void Cal38_Destroy(Actor* thisx, PlayState* play);
+void Cal38_Update(Actor* thisx, PlayState* play);
+void Cal38_Draw(Actor* thisx, PlayState* play);
 
-void ArmsHook_Wait(ArmsHook* this, PlayState* play);
-void ArmsHook_Shoot(ArmsHook* this, PlayState* play);
-
-// An authentic .38 caliber
+void Cal38_Wait(Cal38* this, PlayState* play);
+void Cal38_Shoot(Cal38* this, PlayState* play);
 
 const ActorInit Arms_Hook_InitVars = {
     ACTOR_ARMS_HOOK,
     ACTORCAT_ITEMACTION,
     FLAGS,
     OBJECT_LINK_BOY,
-    sizeof(ArmsHook),
-    (ActorFunc)ArmsHook_Init,
-    (ActorFunc)ArmsHook_Destroy,    
-    (ActorFunc)ArmsHook_Update,
-    (ActorFunc)ArmsHook_Draw,
+    sizeof(Cal38),
+    (ActorFunc)Cal38_Init,
+    (ActorFunc)Cal38_Destroy,    
+    (ActorFunc)Cal38_Update,
+    (ActorFunc)Cal38_Draw,
     NULL,
 };
 
@@ -40,7 +37,7 @@ static ColliderQuadInit sQuadInit = {
     },
     {
         ELEMTYPE_UNK2,
-        { 0x00000080, 0x00, 0x01 },
+        { DMG_SLASH_GIANT | DMG_SLASH_KOKIRI | DMG_ARROW_NORMAL | DMG_BOOMERANG, 0x00, 0x10 },
         { 0xFFCFFFFF, 0x00, 0x00 },
         TOUCH_ON | TOUCH_NEAREST | TOUCH_SFX_NORMAL,
         BUMP_NONE,
@@ -64,21 +61,21 @@ static Vec3f D_80865B94 = { 0.0f, -500.0f, -3000.0f };
 static Vec3f D_80865BA0 = { 0.0f, 500.0f, 1200.0f };
 static Vec3f D_80865BAC = { 0.0f, -500.0f, 1200.0f };
 
-void ArmsHook_SetupAction(ArmsHook* this, ArmsHookActionFunc actionFunc) {
+void Cal38_SetupAction(Cal38* this, Cal38ActionFunc actionFunc) {
     this->actionFunc = actionFunc;
 }
 
-void ArmsHook_Init(Actor* thisx, PlayState* play) {
-    ArmsHook* this = (ArmsHook*)thisx;
+void Cal38_Init(Actor* thisx, PlayState* play) {
+    Cal38* this = (Cal38*)thisx;
 
     Collider_InitQuad(play, &this->collider);
     Collider_SetQuad(play, &this->collider, &this->actor, &sQuadInit);
-    ArmsHook_SetupAction(this, ArmsHook_Wait);
+    Cal38_SetupAction(this, Cal38_Wait);
     this->unk_1E8 = this->actor.world.pos;
 }
 
-void ArmsHook_Destroy(Actor* thisx, PlayState* play) {
-    ArmsHook* this = (ArmsHook*)thisx;
+void Cal38_Destroy(Actor* thisx, PlayState* play) {
+    Cal38* this = (Cal38*)thisx;
 
     if (this->grabbed != NULL) {
         this->grabbed->flags &= ~ACTOR_FLAG_HOOKSHOT_ATTACHED;
@@ -86,26 +83,26 @@ void ArmsHook_Destroy(Actor* thisx, PlayState* play) {
     Collider_DestroyQuad(play, &this->collider);
 }
 
-void ArmsHook_Wait(ArmsHook* this, PlayState* play) {
+void Cal38_Wait(Cal38* this, PlayState* play) {
     if (this->actor.parent == NULL) {
         Player* player = GET_PLAYER(play);
         // get correct timer length for hookshot or longshot
         s32 length = ((player->heldItemAction == PLAYER_IA_HOOKSHOT) ? 13 : 26) *
                      CVarGetFloat(CVAR_CHEAT("HookshotReachMultiplier"), 1.0f);
 
-        ArmsHook_SetupAction(this, ArmsHook_Shoot);
+        Cal38_SetupAction(this, Cal38_Shoot);
         Actor_SetProjectileSpeed(&this->actor, 20.0f);
         this->actor.parent = &GET_PLAYER(play)->actor;
         this->timer = length;
     }
 }
 
-void ArmsHook_PullPlayer(ArmsHook* this) {
+void Cal38_PullPlayer(Cal38* this) {
     this->actor.child = this->actor.parent;
     this->actor.parent->parent = &this->actor;
 }
 
-s32 ArmsHook_AttachToPlayer(ArmsHook* this, Player* player) {
+s32 Cal38_AttachToPlayer(Cal38* this, Player* player) {
     player->actor.child = &this->actor;
     player->heldActor = &this->actor;
     if (this->actor.child != NULL) {
@@ -116,21 +113,21 @@ s32 ArmsHook_AttachToPlayer(ArmsHook* this, Player* player) {
     return false;
 }
 
-void ArmsHook_DetachHookFromActor(ArmsHook* this) {
+void Cal38_DetachHookFromActor(Cal38* this) {
     if (this->grabbed != NULL) {
         this->grabbed->flags &= ~ACTOR_FLAG_HOOKSHOT_ATTACHED;
         this->grabbed = NULL;
     }
 }
 
-s32 ArmsHook_CheckForCancel(ArmsHook* this) {
+s32 Cal38_CheckForCancel(Cal38* this) {
     Player* player = (Player*)this->actor.parent;
 
     if (Player_HoldsHookshot(player)) {
         if ((player->itemAction != player->heldItemAction) || (player->actor.flags & ACTOR_FLAG_TALK) ||
             ((player->stateFlags1 & (PLAYER_STATE1_DEAD | PLAYER_STATE1_DAMAGED)))) {
             this->timer = 0;
-            ArmsHook_DetachHookFromActor(this);
+            Cal38_DetachHookFromActor(this);
             Math_Vec3f_Copy(&this->actor.world.pos, &player->unk_3C8);
             return 1;
         }
@@ -138,13 +135,13 @@ s32 ArmsHook_CheckForCancel(ArmsHook* this) {
     return 0;
 }
 
-void ArmsHook_AttachHookToActor(ArmsHook* this, Actor* actor) {
+void Cal38_AttachHookToActor(Cal38* this, Actor* actor) {
     actor->flags |= ACTOR_FLAG_HOOKSHOT_ATTACHED;
     this->grabbed = actor;
     Math_Vec3f_Diff(&actor->world.pos, &this->actor.world.pos, &this->grabbedDistDiff);
 }
 
-void ArmsHook_Shoot(ArmsHook* this, PlayState* play) {
+void Cal38_Shoot(Cal38* this, PlayState* play) {
     Player* player = GET_PLAYER(play);
     Actor* touchedActor;
     Actor* grabbed;
@@ -167,21 +164,45 @@ void ArmsHook_Shoot(ArmsHook* this, PlayState* play) {
     s32 pad1;
 
     if ((this->actor.parent == NULL) || (!Player_HoldsHookshot(player))) {
-        ArmsHook_DetachHookFromActor(this);
+        Cal38_DetachHookFromActor(this);
         Actor_Kill(&this->actor);
         return;
     }
 
     func_8002F8F0(&player->actor, NA_SE_IT_HOOKSHOT_CHAIN - SFX_FLAG);
-    ArmsHook_CheckForCancel(this);
+    Cal38_CheckForCancel(this);
 
     if ((this->timer != 0) && (this->collider.base.atFlags & AT_HIT) &&
         (this->collider.info.atHitInfo->elemType != ELEMTYPE_UNK4)) {
+        touchedActor = this->collider.base.at;
+        if ((touchedActor->update != NULL) &&
+            (touchedActor->flags & (ACTOR_FLAG_HOOKSHOT_PULLS_ACTOR | ACTOR_FLAG_HOOKSHOT_PULLS_PLAYER))) {
+            if (this->collider.info.atHitInfo->bumperFlags & BUMP_HOOKABLE) {
+                Cal38_AttachHookToActor(this, touchedActor);
+                if (CHECK_FLAG_ALL(touchedActor->flags, ACTOR_FLAG_HOOKSHOT_PULLS_PLAYER)) {
+                    Cal38_PullPlayer(this);
+                }
+            }
+        }
         this->timer = 0;
-        Audio_PlaySoundGeneral(NA_SE_IT_BOMB_EXPLOSION, &this->actor.projectedPos, 4, &gSfxDefaultFreqAndVolScale,
+        Audio_PlaySoundGeneral(NA_SE_IT_ARROW_STICK_CRE, &this->actor.projectedPos, 4, &gSfxDefaultFreqAndVolScale,
                                &gSfxDefaultFreqAndVolScale, &gSfxDefaultReverb);
-        EffectSsHitMark_Spawn(play, EFFECT_HITMARK_WHITE, 300, &this->actor.world.pos);
     } else if (DECR(this->timer) == 0) {
+        grabbed = this->grabbed;
+        if (grabbed != NULL) {
+            if ((grabbed->update == NULL) || !CHECK_FLAG_ALL(grabbed->flags, ACTOR_FLAG_HOOKSHOT_ATTACHED)) {
+                grabbed = NULL;
+                this->grabbed = NULL;
+            } else if (this->actor.child != NULL) {
+                sp94 = Actor_WorldDistXYZToActor(&this->actor, grabbed);
+                sp90 = sqrtf(SQ(this->grabbedDistDiff.x) + SQ(this->grabbedDistDiff.y) + SQ(this->grabbedDistDiff.z));
+                Math_Vec3f_Diff(&grabbed->world.pos, &this->grabbedDistDiff, &this->actor.world.pos);
+                if (50.0f < (sp94 - sp90)) {
+                    Cal38_DetachHookFromActor(this);
+                    grabbed = NULL;
+                }
+            }
+        }
 
         bodyDistDiff = Math_Vec3f_DistXYZAndStoreDiff(&player->unk_3C8, &this->actor.world.pos, &bodyDistDiffVec);
         if (bodyDistDiff < 30.0f) {
@@ -223,10 +244,10 @@ void ArmsHook_Shoot(ArmsHook* this, PlayState* play) {
         }
 
         if (phi_f16 < 50.0f) {
-            ArmsHook_DetachHookFromActor(this);
+            Cal38_DetachHookFromActor(this);
             if (phi_f16 == 0.0f) {
-                ArmsHook_SetupAction(this, ArmsHook_Wait);
-                if (ArmsHook_AttachToPlayer(this, player)) {
+                Cal38_SetupAction(this, Cal38_Wait);
+                if (Cal38_AttachToPlayer(this, player)) {
                     Math_Vec3f_Diff(&this->actor.world.pos, &player->actor.world.pos, &player->actor.velocity);
                     player->actor.velocity.y -= 20.0f;
                 }
@@ -257,10 +278,10 @@ void ArmsHook_Shoot(ArmsHook* this, PlayState* play) {
                 if (bgId != BGCHECK_SCENE) {
                     dynaPolyActor = DynaPoly_GetActor(&play->colCtx, bgId);
                     if (dynaPolyActor != NULL) {
-                        ArmsHook_AttachHookToActor(this, &dynaPolyActor->actor);
+                        Cal38_AttachHookToActor(this, &dynaPolyActor->actor);
                     }
                 }
-                ArmsHook_PullPlayer(this);
+                Cal38_PullPlayer(this);
                 Audio_PlaySoundGeneral(NA_SE_IT_HOOKSHOT_STICK_OBJ, &this->actor.projectedPos, 4,
                                        &gSfxDefaultFreqAndVolScale, &gSfxDefaultFreqAndVolScale, &gSfxDefaultReverb);
             } else {
@@ -274,16 +295,16 @@ void ArmsHook_Shoot(ArmsHook* this, PlayState* play) {
     }
 }
 
-void ArmsHook_Update(Actor* thisx, PlayState* play) {
-    ArmsHook* this = (ArmsHook*)thisx;
+void Cal38_Update(Actor* thisx, PlayState* play) {
+    Cal38* this = (Cal38*)thisx;
 
     this->actionFunc(this, play);
     this->unk_1F4 = this->unk_1E8;
 }
 
-void ArmsHook_Draw(Actor* thisx, PlayState* play) {
+void Cal38_Draw(Actor* thisx, PlayState* play) {
     s32 pad;
-    ArmsHook* this = (ArmsHook*)thisx;
+    Cal38* this = (Cal38*)thisx;
     Player* player = GET_PLAYER(play);
     Vec3f sp78;
     Vec3f sp6C;
@@ -294,7 +315,7 @@ void ArmsHook_Draw(Actor* thisx, PlayState* play) {
     if ((player->actor.draw != NULL) && (player->rightHandType == PLAYER_MODELTYPE_RH_HOOKSHOT)) {
         OPEN_DISPS(play->state.gfxCtx);
 
-        if ((ArmsHook_Shoot != this->actionFunc) || (this->timer <= 0)) {
+        if ((Cal38_Shoot != this->actionFunc) || (this->timer <= 0)) {
             Matrix_MultVec3f(&D_80865B70, &this->unk_1E8);
             Matrix_MultVec3f(&D_80865B88, &sp6C);
             Matrix_MultVec3f(&D_80865B94, &sp60);
@@ -313,7 +334,23 @@ void ArmsHook_Draw(Actor* thisx, PlayState* play) {
         }
         gSPMatrix(POLY_OPA_DISP++, MATRIX_NEWMTX(play->state.gfxCtx), G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
         if (GameInteractor_Should(VB_DRAW_HOOKSHOT_TIP, true, player, play)) {
-            gSPDisplayList(POLY_OPA_DISP++, gLinkAdultHookshotTipDL);
+            gSPDisplayList(POLY_OPA_DISP++, gLinkAdultBrokenGiantsKnifeBladeDL);
+        }
+        Matrix_Translate(this->actor.world.pos.x, this->actor.world.pos.y, this->actor.world.pos.z, MTXMODE_NEW);
+        Math_Vec3f_Diff(&player->unk_3C8, &this->actor.world.pos, &sp78);
+        sp58 = SQ(sp78.x) + SQ(sp78.z);
+        sp5C = sqrtf(sp58);
+        Matrix_RotateY(Math_FAtan2F(sp78.x, sp78.z), MTXMODE_APPLY);
+        Matrix_RotateX(Math_FAtan2F(-sp78.y, sp5C), MTXMODE_APPLY);
+        if (CVarGetInteger(CVAR_ENHANCEMENT("EquipmentAlwaysVisible"), 0) &&
+            CVarGetInteger(CVAR_ENHANCEMENT("ScaleAdultEquipmentAsChild"), 0) && LINK_IS_CHILD) {
+            Matrix_Scale(0.012f, 0.012f, sqrtf(SQ(sp78.y) + sp58) * 0.01f, MTXMODE_APPLY);
+        } else {
+            Matrix_Scale(0.015f, 0.015f, sqrtf(SQ(sp78.y) + sp58) * 0.01f, MTXMODE_APPLY);
+        }
+        gSPMatrix(POLY_OPA_DISP++, MATRIX_NEWMTX(play->state.gfxCtx), G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
+        if (GameInteractor_Should(VB_DRAW_HOOKSHOT_CHAIN, true, player, play)) {
+            gSPDisplayList(POLY_OPA_DISP++, gLinkAdultBrokenGiantsKnifeBladeDL);
         }
 
         CLOSE_DISPS(play->state.gfxCtx);
