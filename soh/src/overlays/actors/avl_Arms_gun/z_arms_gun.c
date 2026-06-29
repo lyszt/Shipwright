@@ -13,8 +13,8 @@ void Cal38_Draw(Actor* thisx, PlayState* play);
 void Cal38_Wait(Cal38* this, PlayState* play);
 void Cal38_Shoot(Cal38* this, PlayState* play);
 
-const ActorInit Arms_Hook_InitVars = {
-    ACTOR_ARMS_HOOK,
+const ActorInit Obj_gun_InitVars = {
+    ACTOR_OBJ_GUN,
     ACTORCAT_ITEMACTION,
     FLAGS,
     OBJECT_LINK_BOY,
